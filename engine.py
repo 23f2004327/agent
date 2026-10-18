@@ -71,7 +71,7 @@ def select(spec):
 
 
 STATUS_FOR = {"revenue": "paid", "orders": "paid", "units": "paid", "aov": "paid",
-              "customers": "paid", "refund_amount": "refunded", "refund_count": "refunded",
+              "customers": "paid", "avg_refund": "refunded", "refund_amount": "refunded", "refund_count": "refunded",
               "void_count": "void"}
 
 
@@ -84,7 +84,7 @@ def value_of(metric, rows):
         return Decimal(len(rows))
     if metric == "units":
         return Decimal(sum(o["qty"] for o in rows))
-    if metric == "aov":
+    if metric in ("aov", "avg_refund"):
         return (sum((o["usd"] for o in rows), Decimal(0)) / len(rows)) if rows else Decimal(0)
     if metric == "customers":
         return Decimal(len({o["customer"] for o in rows}))
@@ -92,7 +92,7 @@ def value_of(metric, rows):
 
 
 def fmt(metric, v):
-    if metric in ("revenue", "refund_amount", "aov"):
+    if metric in ("revenue", "refund_amount", "aov", "avg_refund"):
         return money(v)
     return int(v)
 
@@ -238,7 +238,12 @@ def parse_rules(question):
     spec["start"], spec["end"] = parse_dates(t)
 
     # metric
-    if "refund" in t:
+    avg_q = re.search(r"\baverag|\bavg\b|\bmean\b|per order|each order|typical order|an? (?:\w+ ){0,3}order (?:is )?worth", t)
+    if "refund" in t and avg_q:
+        spec["metric"] = "avg_refund"
+    elif avg_q and not re.search(r"per customer|per product|per region|per day|per month", t):
+        spec["metric"] = "aov"
+    elif "refund" in t:
         count_q = re.search(r"how many|number of|count of|\bcount\b|# of", t)
         spec["metric"] = "refund_count" if count_q and not re.search(r"amount|value|worth|total refund(?:ed)? (?:in|usd|\$)|how much", t) else "refund_amount"
     elif re.search(r"\bvoid(?:ed)?\b|cancel", t):
